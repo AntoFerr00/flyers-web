@@ -56,7 +56,7 @@ export default function FlyerGrid({ supermarkets }) {
                             style={{ backgroundColor: sm.color || '#eee' }}
                         >
                             {sm.logo ? (
-                                <img src={sm.logo} alt={sm.name} className="h-full w-full object-cover" />
+                                <img src={sm.logo} alt={sm.name} className="h-full w-full object-contain p-8" />
                             ) : (
                                 <h3 className="text-3xl font-black text-white tracking-tighter drop-shadow-md z-10 relative">
                                     {sm.name}

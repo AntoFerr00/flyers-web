@@ -1,4 +1,15 @@
-const puppeteer = require('puppeteer');
+const { BASE_URL, openPromoQui, getPageProps } = require('./promoqui');
+
+function toSlug(text) {
+    return text.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+function parsePrice(value) {
+    if (!value) return null;
+    const price = parseFloat(String(value).replace(/[^\d.,]/g, '').replace(',', '.'));
+    return Number.isFinite(price) ? price : null;
+}
 
 (async () => {
     const args = process.argv.slice(2);
@@ -6,137 +17,49 @@ const puppeteer = require('puppeteer');
     const lat = args[1];
     const lng = args[2];
 
-    const browser = await puppeteer.launch({
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-    });
-    const page = await browser.newPage();
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-
-    // Use the correct search URL
-    let url = `https://www.promoqui.it/search?q=${encodeURIComponent(query)}`;
-    if (lat && lng) {
-        url += `&lat=${lat}&lng=${lng}`;
-    }
+    const { browser, page } = await openPromoQui(lat, lng);
+    const offers = [];
 
     try {
-        await page.goto(url, { waitUntil: 'networkidle2', timeout: 45000 });
+        // Product category pages (/offerte/<product>) list the offers near the
+        // position set above; free-text search covers queries that are not a category.
+        const categoryUrl = `${BASE_URL}/offerte/${toSlug(query)}`;
+        const urls = [categoryUrl, `${categoryUrl}?page=2`, `${BASE_URL}/search?q=${encodeURIComponent(query)}`];
 
-        // Scroll to load more products
-        await page.evaluate(async () => {
-            for (let i = 0; i < 8; i++) {
-                window.scrollBy(0, 800);
-                await new Promise(r => setTimeout(r, 400));
+        for (const url of urls) {
+            const props = await getPageProps(page, url).catch(() => null);
+            if (!props || (props.pageInfo && props.pageInfo.pageType === 'ERRORPAGE')) {
+                if (url === categoryUrl) urls.splice(1, 1); // no category, so no second page either
+                continue;
             }
-        });
-
-        await new Promise(r => setTimeout(r, 3000));
+            const resources = props.apiResources || {};
+            offers.push(
+                ...((resources.flyerGibsData && resources.flyerGibsData.flyerGibs) || []),
+                ...((resources.offersTable && resources.offersTable.flyerGibs) || [])
+            );
+        }
     } catch (e) { }
 
-    // Extract product data from the DOM
-    const products = await page.evaluate((searchQuery) => {
-        const results = [];
+    const products = offers.map(offer => {
+        const settings = offer.settings || {};
+        return {
+            name: (offer.title || '').trim(),
+            subtitle: settings.brand || null,
+            price: parsePrice(settings.price_extended ? settings.price_extended.digits : settings.price),
+            image: offer.image || settings.image_url || null,
+            retailer: offer.retailerName || null,
+            discount: settings.sale || null
+        };
+    });
 
-        // PromoQui search uses offer grid items with specific class structure
-        // Look for elements that have product title and price
-        const offerCards = document.querySelectorAll('.leaflets-carousel-item, .offer-grid-item, [class*="offer-item"], .search-result-item');
-
-        offerCards.forEach(card => {
-            const titleEl = card.querySelector('[class*="title"], h3, h4');
-            const subtitleEl = card.querySelector('[class*="subtitle"]');
-            const priceEl = card.querySelector('[class*="price"]');
-            const imgEl = card.querySelector('img');
-            const retailerEl = card.querySelector('[class*="retailer"], [class*="brand"]');
-
-            if (titleEl) {
-                results.push({
-                    name: titleEl.textContent.trim(),
-                    subtitle: subtitleEl ? subtitleEl.textContent.trim() : null,
-                    price: priceEl ? priceEl.textContent.trim() : null,
-                    image: imgEl ? (imgEl.src || imgEl.dataset.original) : null,
-                    retailer: retailerEl ? retailerEl.textContent.trim() : null
-                });
-            }
-        });
-
-        // Fallback: if no specific card selectors match, try generic extraction
-        if (results.length === 0) {
-            // Look for contentBody sections that contain offers
-            const contentBodies = document.querySelectorAll('.contentBody');
-            contentBodies.forEach(body => {
-                const items = body.querySelectorAll('a, article, [class*="item"]');
-                items.forEach(item => {
-                    const text = item.textContent.trim();
-                    const img = item.querySelector('img');
-                    // Extract price patterns (€ X.XX or X,XX €)
-                    const priceMatch = text.match(/(\d+[.,]\d{2})\s*€|€\s*(\d+[.,]\d{2})/);
-                    const price = priceMatch ? (priceMatch[1] || priceMatch[2]) : null;
-
-                    if (text.length > 5 && text.length < 200) {
-                        results.push({
-                            name: text.split('\n')[0].trim(),
-                            price: price,
-                            image: img ? (img.src || img.dataset.original) : null,
-                            retailer: null
-                        });
-                    }
-                });
-            });
-        }
-
-        // Second fallback: parse from __NEXT_DATA__
-        if (results.length === 0) {
-            const nextEl = document.getElementById('__NEXT_DATA__');
-            if (nextEl) {
-                try {
-                    const data = JSON.parse(nextEl.textContent);
-                    const pp = data.props.pageProps;
-
-                    // Search for offers arrays
-                    const findOffers = (obj, depth = 0) => {
-                        if (depth > 3 || !obj || typeof obj !== 'object') return;
-
-                        Object.keys(obj).forEach(key => {
-                            const val = obj[key];
-                            if (Array.isArray(val) && val.length > 0 && val[0] && (val[0].title || val[0].name)) {
-                                val.forEach(item => {
-                                    const name = item.title || item.name || '';
-                                    if (name.toLowerCase().includes(searchQuery.toLowerCase())) {
-                                        let imgUrl = null;
-                                        if (item.image) {
-                                            imgUrl = `https://data.promoqui.it/${item.image.replace(':FORMAT', 'medium')}`;
-                                        }
-                                        results.push({
-                                            name: name,
-                                            price: item.price ? String(item.price) : null,
-                                            image: imgUrl,
-                                            retailer: item.retailer ? item.retailer.name : null
-                                        });
-                                    }
-                                });
-                            } else if (typeof val === 'object') {
-                                findOffers(val, depth + 1);
-                            }
-                        });
-                    };
-
-                    findOffers(pp);
-                } catch (e) { }
-            }
-        }
-
-        return results;
-    }, query);
-
-    // Filter by relevance, exclude unknown retailers and missing prices
-    const q = query.toLowerCase();
+    // Keep offers naming every word of the query, from a known retailer, with a price
+    const words = query.toLowerCase().split(/\s+/).filter(Boolean);
     const filtered = products
         .filter(p => {
-            const name = (p.name || '').toLowerCase();
-            const subtitle = (p.subtitle || '').toLowerCase();
-            const hasRelevance = name.includes(q) || subtitle.includes(q);
+            const text = `${p.name} ${p.subtitle || ''}`.toLowerCase();
+            const hasRelevance = words.every(w => text.includes(w));
             const hasRetailer = p.retailer && p.retailer.trim() !== '';
-            const hasPrice = p.price && p.price.trim() !== '';
-            return hasRelevance && hasRetailer && hasPrice;
+            return hasRelevance && hasRetailer && p.price !== null;
         })
         .map((p, index) => ({
             supermarket: {
@@ -146,22 +69,22 @@ const puppeteer = require('puppeteer');
             product: {
                 id: `prod-${index}`,
                 name: p.name,
-                price: parseFloat(p.price.replace(/[^\d.,]/g, '').replace(',', '.')) || null,
+                price: p.price,
                 image: p.image,
                 description: p.subtitle || '',
                 unit: '',
-                discount: null
+                discount: p.discount
             }
         }));
 
-    // Deduplicate
+    // Deduplicate: the same product can appear in several sections of a page
     const uniqueResults = [];
-    const seenNames = new Set();
+    const seenKeys = new Set();
     filtered.forEach(r => {
-        const key = r.product.name.toLowerCase();
-        if (!seenNames.has(key)) {
+        const key = `${r.supermarket.name}|${r.product.name}|${r.product.price}`.toLowerCase();
+        if (!seenKeys.has(key)) {
             uniqueResults.push(r);
-            seenNames.add(key);
+            seenKeys.add(key);
         }
     });
 

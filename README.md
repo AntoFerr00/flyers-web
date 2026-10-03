@@ -1,36 +1,48 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# FlyerFinder
 
-## Getting Started
+Find supermarket flyers and grocery deals near any address in Italy, search for a product across nearby shops, and compare a whole shopping list to see where it costs least.
 
-First, run the development server:
+Data comes from [PromoQui](https://www.promoqui.it), read by the scripts in [`scripts/`](scripts).
+
+![Nearby flyers](docs/screenshots/03-nearby-flyers.png)
+
+## Features
+
+- **Location search**: type an address (geocoded with OpenStreetMap Nominatim) or use the browser's location.
+- **Nearby flyers**: grocery flyers around that position, filterable by distance (100 m – 5 km).
+- **Flyer viewer**: open any flyer and scroll through its pages.
+- **Product search**: current offers for a product near you, with price and discount.
+- **Shopping list**: search every item at once and compare shops by estimated total, or compare items one by one.
+
+## Screenshots
+
+| | |
+|---|---|
+| ![Home](docs/screenshots/01-home.png) | ![Address search](docs/screenshots/02-address-search.png) |
+| ![Flyer viewer](docs/screenshots/04-flyer-viewer.png) | ![Product search](docs/screenshots/05-product-search.png) |
+
+![Shopping list comparison](docs/screenshots/06-shopping-list.png)
+
+## Getting started
+
+Requires Node.js 18 or later.
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+## How it works
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The Next.js API routes in [`app/api`](app/api) run the scripts in [`scripts/`](scripts):
 
-## Learn More
+| Script | Used by | What it does |
+|---|---|---|
+| `scraper_flyers.js` | `/api/supermarkets` | Lists grocery flyers near a position through PromoQui's flyer listing |
+| `scraper.js` | `/api/products/search`, `/api/products/shopping-list` | Reads product offers near a position from PromoQui's offer and search pages |
+| `scraper_flyer_details.js` | `/api/flyers/[id]` | Resolves a flyer's page images from its publication |
+| `promoqui.js` | all of the above | Shared helpers: opening the site at a position, reading page data |
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The scrapers depend on how promoqui.it is built, so they may need updating when the site changes.
