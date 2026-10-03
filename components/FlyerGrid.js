@@ -31,6 +31,17 @@ export default function FlyerGrid({ supermarkets }) {
         }
     }, [selectedSupermarket]);
 
+    // Close the flyer viewer with the Escape key
+    useEffect(() => {
+        if (!selectedSupermarket) return;
+
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape') setSelectedSupermarket(null);
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [selectedSupermarket]);
+
     if (!supermarkets || supermarkets.length === 0) {
         return (
             <div className="text-center py-20 text-gray-400">
