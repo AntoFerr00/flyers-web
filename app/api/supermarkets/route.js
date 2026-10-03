@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import path from 'path';
+import { isValidLatLon } from '@/lib/coordinates';
 
 export async function GET(request) {
     const { searchParams } = new URL(request.url);
@@ -9,6 +10,10 @@ export async function GET(request) {
 
     if (!lat || !lon) {
         return NextResponse.json({ error: 'Latitude and Longitude required' }, { status: 400 });
+    }
+
+    if (!isValidLatLon(lat, lon)) {
+        return NextResponse.json({ error: 'Invalid latitude or longitude' }, { status: 400 });
     }
 
     try {
@@ -27,7 +32,8 @@ export async function GET(request) {
 
         return new Promise((resolve) => {
             // Pass city, lat, and lon to scraper
-            exec(`node "${scriptPath}" "${city}" "${lat}" "${lon}"`, (error, stdout, stderr) => {
+            // execFile passes arguments directly to node, no shell is involved
+            execFile(process.execPath, [scriptPath, city, lat, lon], (error, stdout, stderr) => {
                 if (error) {
                     console.error('Scraper error:', stderr);
                     // Fallback to empty list or error

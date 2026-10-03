@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import path from 'path';
+import { isValidCoordinate } from '@/lib/coordinates';
 
 export async function GET(request) {
     const { searchParams } = new URL(request.url);
@@ -10,6 +11,10 @@ export async function GET(request) {
 
     if (!itemsParam) {
         return NextResponse.json({ error: 'Items list is required' }, { status: 400 });
+    }
+
+    if ((lat && !isValidCoordinate(lat, 90)) || (lon && !isValidCoordinate(lon, 180))) {
+        return NextResponse.json({ error: 'Invalid latitude or longitude' }, { status: 400 });
     }
 
     const items = itemsParam.split(',').map(i => i.trim()).filter(Boolean);
@@ -22,11 +27,12 @@ export async function GET(request) {
     // Search each item in parallel
     const searchPromises = items.map(item => {
         return new Promise((resolve) => {
-            const args = [`"${item}"`];
-            if (lat) args.push(`"${lat}"`);
-            if (lon) args.push(`"${lon}"`);
+            // execFile passes arguments directly to node, no shell is involved
+            const args = [scriptPath, item];
+            if (lat) args.push(lat);
+            if (lon) args.push(lon);
 
-            exec(`node "${scriptPath}" ${args.join(' ')}`, { timeout: 120000 }, (error, stdout, stderr) => {
+            execFile(process.execPath, args, { timeout: 120000 }, (error, stdout, stderr) => {
                 if (error) {
                     console.error(`Scraper error for "${item}":`, stderr);
                     resolve({ searchTerm: item, results: [] });
