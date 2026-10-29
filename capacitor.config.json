@@ -1,0 +1,8 @@
+{
+  "appId": "com.antoferr00.flyerfinder",
+  "appName": "FlyerFinder",
+  "webDir": "out",
+  "android": {
+    "adjustMarginsForEdgeToEdge": "auto"
+  }
+}

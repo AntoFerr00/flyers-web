@@ -40,5 +40,5 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# cached flyer images
-/public/flyer-cache/
+# Android build output
+/dist/

@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { MapPin, Search, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
+import { searchAddress } from '@/lib/dataSource';
 
 export default function LocationSearch({ onLocationSelect }) {
     const [query, setQuery] = useState('');
@@ -38,9 +39,7 @@ export default function LocationSearch({ onLocationSelect }) {
         setLoading(true);
         searchTimeout.current = setTimeout(async () => {
             try {
-                const res = await fetch(`/api/geocode?q=${encodeURIComponent(val)}`);
-                const data = await res.json();
-                setResults(data);
+                setResults(await searchAddress(val));
                 setShowResults(true);
             } catch (err) {
                 console.error(err);
