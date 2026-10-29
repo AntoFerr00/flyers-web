@@ -5,6 +5,8 @@ import LocationSearch from '@/components/LocationSearch';
 import FlyerGrid from '@/components/FlyerGrid';
 import ProductSearch from '@/components/ProductSearch';
 import ShoppingList from '@/components/ShoppingList';
+import { fetchNearbyFlyers, searchProducts, searchShoppingList } from '@/lib/dataSource';
+import { useBackButton } from '@/lib/useBackButton';
 import { MapPin, ShoppingBasket, ArrowLeft, ArrowUpDown, ExternalLink, Navigation, ShoppingCart, Store, Package, List } from 'lucide-react';
 
 export default function Home() {
@@ -172,6 +174,13 @@ export default function Home() {
         return `${dist.toFixed(1)} km`;
     };
 
+    // In the Android app, the back button returns from product results or the
+    // shopping list to the flyers
+    useBackButton(viewMode === 'products' || activeTab === 'shopping', () => {
+        setActiveTab('flyers');
+        setViewMode('flyers');
+    });
+
     // Fetch supermarkets when location changes
     useEffect(() => {
         if (location) {
@@ -182,9 +191,7 @@ export default function Home() {
     const fetchSupermarkets = async (lat, lon) => {
         setLoading(true);
         try {
-            const res = await fetch(`/api/supermarkets?lat=${lat}&lon=${lon}`);
-            const data = await res.json();
-            setSupermarkets(data);
+            setSupermarkets(await fetchNearbyFlyers(lat, lon));
             setViewMode('flyers');
         } catch (error) {
             console.error("Failed to fetch supermarkets", error);
@@ -206,9 +213,7 @@ export default function Home() {
 
         setLoading(true);
         try {
-            const res = await fetch(`/api/products/search?q=${encodeURIComponent(query)}&lat=${location.lat}&lon=${location.lon}`);
-            const data = await res.json();
-            setSearchResults(data);
+            setSearchResults(await searchProducts(query, location.lat, location.lon));
             setViewMode('products');
         } catch (error) {
             console.error("Failed to search products", error);
@@ -226,9 +231,7 @@ export default function Home() {
         setShoppingLoading(true);
         setViewMode('shopping');
         try {
-            const itemsParam = items.map(i => encodeURIComponent(i)).join(',');
-            const res = await fetch(`/api/products/shopping-list?items=${itemsParam}&lat=${location.lat}&lon=${location.lon}`);
-            const data = await res.json();
+            const data = await searchShoppingList(items, location.lat, location.lon);
             setShoppingResults(data.results || []);
             setShoppingSummary(data.summary || []);
         } catch (error) {
@@ -442,7 +445,7 @@ export default function Home() {
                                                 {item.product.image && (
                                                     <div className="relative h-48 mb-3 overflow-hidden rounded-lg bg-gray-50">
                                                         <img
-                                                            src={`/api/image-proxy?url=${encodeURIComponent(item.product.image)}`}
+                                                            src={item.product.image}
                                                             alt={item.product.name}
                                                             className="object-contain w-full h-full group-hover:scale-105 transition-transform duration-300"
                                                             onError={(e) => { e.target.style.display = 'none' }}
@@ -637,7 +640,7 @@ export default function Home() {
                                                                     {item.product.image && (
                                                                         <div className="relative h-40 mb-3 overflow-hidden rounded-lg bg-gray-50">
                                                                             <img
-                                                                                src={`/api/image-proxy?url=${encodeURIComponent(item.product.image)}`}
+                                                                                src={item.product.image}
                                                                                 alt={item.product.name}
                                                                                 className="object-contain w-full h-full group-hover:scale-105 transition-transform duration-300"
                                                                                 onError={(e) => { e.target.style.display = 'none' }}

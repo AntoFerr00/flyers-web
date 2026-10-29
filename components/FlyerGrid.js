@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShoppingCart, X, Calendar } from 'lucide-react';
 import clsx from 'clsx';
+import { fetchFlyerPages } from '@/lib/dataSource';
+import { useBackButton } from '@/lib/useBackButton';
 
 export default function FlyerGrid({ supermarkets }) {
     const [selectedSupermarket, setSelectedSupermarket] = useState(null);
@@ -15,8 +17,7 @@ export default function FlyerGrid({ supermarkets }) {
             setLoadingDetails(true);
             setFlyerDetails(null);
 
-            fetch(`/api/flyers/${selectedSupermarket.flyer.id}?url=${encodeURIComponent(selectedSupermarket.flyer.url)}`)
-                .then(res => res.json())
+            fetchFlyerPages(selectedSupermarket.flyer.url)
                 .then(data => {
                     setFlyerDetails(data);
                     setLoadingDetails(false);
@@ -41,6 +42,9 @@ export default function FlyerGrid({ supermarkets }) {
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [selectedSupermarket]);
+
+    // ...and with Android's back button in the app
+    useBackButton(!!selectedSupermarket, () => setSelectedSupermarket(null));
 
     if (!supermarkets || supermarkets.length === 0) {
         return (
